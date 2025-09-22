@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, User, FileText, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, FileText, ChevronRight } from 'lucide-react';
 import { appointmentApi } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 
 interface BookAppointmentProps {
   onNavigate: (page: string) => void;
@@ -18,42 +27,11 @@ export default function BookAppointment({ onNavigate }: BookAppointmentProps) {
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-
-  // Helper function to generate calendar dates
-  const generateCalendarDates = () => {
-    const today = new Date();
-    const currentDate = new Date(currentMonth);
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    
-    // Get first day of the month and last day of the month
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    
-    // Get the day of week for the first day (0 = Sunday, 1 = Monday, etc.)
-    const startDay = firstDay.getDay();
-    
-    const dates = [];
-    
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startDay; i++) {
-      dates.push(null);
-    }
-    
-    // Add all days of the month
-    for (let day = 1; day <= lastDay.getDate(); day++) {
-      const date = new Date(year, month, day);
-      // Only include dates from today onwards
-      if (date >= today || date.toDateString() === today.toDateString()) {
-        dates.push(date);
-      } else {
-        dates.push(null); // Past dates as null
-      }
-    }
-    
-    return dates;
-  };
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+  const [showLoginDialog, setShowLoginDialog] = useState(false);
+  const [showValidationDialog, setShowValidationDialog] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Fetch doctors from API on component mount
   useEffect(() => {
@@ -110,12 +88,12 @@ export default function BookAppointment({ onNavigate }: BookAppointmentProps) {
 
   const handleBookAppointment = async () => {
     if (!user) {
-      alert('Please log in to book an appointment.');
+      setShowLoginDialog(true);
       return;
     }
 
     if (!selectedDoctor || !selectedDate || !selectedTime) {
-      alert('Please fill in all required fields.');
+      setShowValidationDialog(true);
       return;
     }
 
@@ -127,11 +105,11 @@ export default function BookAppointment({ onNavigate }: BookAppointmentProps) {
         selectedTime,
         symptoms
       );
-      alert('Appointment booked successfully! You will receive a confirmation email shortly.');
-      onNavigate('patient-dashboard');
+      setShowSuccessDialog(true);
     } catch (err) {
       console.error('Error booking appointment:', err);
-      alert('Failed to book appointment. Please try again.');
+      setErrorMessage('Failed to book appointment. Please try again.');
+      setShowErrorDialog(true);
     } finally {
       setLoading(false);
     }
@@ -251,140 +229,49 @@ export default function BookAppointment({ onNavigate }: BookAppointmentProps) {
           </div>
 
           <div className="space-y-8">
-            {/* Date Selection - Calendar */}
-            <div>
-              <label className="block text-lg font-medium text-gray-900 mb-4">
-                <Calendar className="w-5 h-5 inline mr-2" />
-                Select Date
-              </label>
-              
-              {/* Calendar Header */}
-              <div className="bg-white border rounded-xl overflow-hidden">
-                <div className="flex items-center justify-between p-4 bg-gray-50 border-b">
-                  <button
-                    onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
-                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-                    disabled={currentMonth.getMonth() === new Date().getMonth() && currentMonth.getFullYear() === new Date().getFullYear()}
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                  </h3>
-                  <button
-                    onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
-                    className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </div>
-                
-                {/* Days of week header */}
-                <div className="grid grid-cols-7 border-b">
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="p-3 text-center text-sm font-medium text-gray-500 bg-gray-50">
-                      {day}
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Calendar dates */}
-                <div className="grid grid-cols-7">
-                  {generateCalendarDates().map((date, index) => {
-                    if (!date) {
-                      return <div key={index} className="p-3 h-12"></div>;
-                    }
-                    
-                    const dateStr = date.toISOString().split('T')[0];
-                    const isSelected = selectedDate === dateStr;
-                    const isToday = date.toDateString() === new Date().toDateString();
-                    
-                    return (
-                      <button
-                        key={index}
-                        onClick={() => setSelectedDate(dateStr)}
-                        className={`p-3 h-12 text-sm border-r border-b hover:bg-blue-50 transition-colors ${
-                          isSelected 
-                            ? 'bg-blue-600 text-white' 
-                            : isToday 
-                            ? 'bg-blue-100 text-blue-800 font-semibold'
-                            : 'text-gray-700 hover:text-blue-600'
-                        }`}
-                      >
-                        {date.getDate()}
-                      </button>
-                    );
-                  })}
-                </div>
+            {/* Date and Time Selection - shadcn style */}
+            <div className="flex gap-6">
+              <div className="flex flex-col gap-3 flex-1">
+                <label htmlFor="date-picker" className="text-lg font-medium text-gray-900">
+                  <Calendar className="w-5 h-5 inline mr-2" />
+                  Date
+                </label>
+                <input
+                  type="date"
+                  id="date-picker"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="flex h-12 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50"
+                />
               </div>
-            </div>
-
-            {/* Time Selection */}
-            <div>
-              <label className="block text-lg font-medium text-gray-900 mb-4">
-                <Clock className="w-5 h-5 inline mr-2" />
-                Select Time
-              </label>
-              <div className="bg-white border rounded-xl p-4">
-                {availableTimeSlots.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 mb-2">
-                      {selectedDoctor && selectedDate 
-                        ? 'No available time slots for this date. Please select a different date.' 
-                        : 'Please select a doctor and date to see available time slots.'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* Morning Slots */}
-                    {availableTimeSlots.filter(time => time.includes('AM')).length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Morning</h4>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                          {availableTimeSlots
-                            .filter(time => time.includes('AM'))
-                            .map((time: string) => (
-                              <button
-                                key={time}
-                                onClick={() => setSelectedTime(time)}
-                                className={`p-2 text-sm rounded-lg border-2 font-medium transition-all ${
-                                  selectedTime === time
-                                    ? 'border-blue-500 bg-blue-50 text-blue-600'
-                                    : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                                }`}
-                              >
-                                {time}
-                              </button>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Afternoon/Evening Slots */}
-                    {availableTimeSlots.filter(time => time.includes('PM')).length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Afternoon & Evening</h4>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                          {availableTimeSlots
-                            .filter(time => time.includes('PM'))
-                            .map((time: string) => (
-                              <button
-                                key={time}
-                                onClick={() => setSelectedTime(time)}
-                                className={`p-2 text-sm rounded-lg border-2 font-medium transition-all ${
-                                  selectedTime === time
-                                    ? 'border-blue-500 bg-blue-50 text-blue-600'
-                                    : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                                }`}
-                              >
-                                {time}
-                              </button>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+              
+              <div className="flex flex-col gap-3 flex-1">
+                <label htmlFor="time-picker" className="text-lg font-medium text-gray-900">
+                  <Clock className="w-5 h-5 inline mr-2" />
+                  Time
+                </label>
+                <select
+                  id="time-picker"
+                  value={selectedTime}
+                  onChange={(e) => setSelectedTime(e.target.value)}
+                  disabled={!selectedDate || availableTimeSlots.length === 0}
+                  className="flex h-12 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">
+                    {selectedDate 
+                      ? availableTimeSlots.length === 0 
+                        ? 'No slots available' 
+                        : 'Select time'
+                      : 'Select date first'
+                    }
+                  </option>
+                  {availableTimeSlots.map((time: string) => (
+                    <option key={time} value={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -420,6 +307,77 @@ export default function BookAppointment({ onNavigate }: BookAppointmentProps) {
             </button>
           </div>
         </div>
+
+        {/* Success Dialog */}
+        <AlertDialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Appointment Booked Successfully!</AlertDialogTitle>
+              <AlertDialogDescription>
+                Your appointment has been confirmed. You will receive a confirmation email shortly with all the details.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => {
+                setShowSuccessDialog(false);
+                onNavigate('patient-dashboard');
+              }}>
+                Go to Dashboard
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Error Dialog */}
+        <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Booking Failed</AlertDialogTitle>
+              <AlertDialogDescription>
+                {errorMessage}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => setShowErrorDialog(false)}>
+                Try Again
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Login Required Dialog */}
+        <AlertDialog open={showLoginDialog} onOpenChange={setShowLoginDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Login Required</AlertDialogTitle>
+              <AlertDialogDescription>
+                Please log in to book an appointment.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => setShowLoginDialog(false)}>
+                OK
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Validation Dialog */}
+        <AlertDialog open={showValidationDialog} onOpenChange={setShowValidationDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Missing Information</AlertDialogTitle>
+              <AlertDialogDescription>
+                Please fill in all required fields: doctor, date, and time.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => setShowValidationDialog(false)}>
+                OK
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
