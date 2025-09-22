@@ -1,0 +1,508 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const connectDB = require('./config/db');
+
+// Load environment variables
+dotenv.config();
+
+// Connect to MongoDB
+connectDB();
+
+// Import middleware
+const { authenticateToken, optionalAuth } = require('./middleware/auth');
+
+// Import models
+const User = require('./models/User'); // This imports the 'Users' model defined in User.js
+const Appointment = require('./models/Appointment');
+const Medicine = require('./models/Medicine');
+const Order = require('./models/Order');
+const Test = require('./models/Test');
+const Lab = require('./models/Lab');
+const TestBooking = require('./models/TestBooking');
+const Prescription = require('./models/Prescription');
+const Patient = require('./models/Patient');
+const Doctor = require('./models/Doctor');
+
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
+// Seed initial doctors if none exist
+const seedDoctors = async () => {
+  const count = await User.countDocuments({ userType: 'doctor' });
+  if (count === 0) {
+    const initialDoctors = [
+      { 
+        userType: 'doctor',
+        firstName: 'Alice',
+        lastName: 'Smith',
+        specialty: 'Cardiology',
+        gender: 'female',
+        email: 'alice.smith@hospital.com',
+        password: 'doctor123'
+      },
+      { 
+        userType: 'doctor',
+        firstName: 'Bob',
+        lastName: 'Johnson',
+        specialty: 'Dermatology',
+        gender: 'male',
+        email: 'bob.johnson@hospital.com',
+        password: 'doctor123'
+      },
+      { 
+        userType: 'doctor',
+        firstName: 'Carol',
+        lastName: 'Lee',
+        specialty: 'Pediatrics',
+        gender: 'female',
+        email: 'carol.lee@hospital.com',
+        password: 'doctor123'
+      }
+    ];
+    await User.insertMany(initialDoctors);
+    console.log('Initial doctors seeded');
+  }
+};
+
+// Seed initial data
+const seedDatabase = async () => {
+  await seedDoctors();
+  // Add more seed functions as needed
+};
+
+// Call seed function
+seedDatabase();
+
+// List doctors
+// Get all doctors
+app.get('/api/doctors', optionalAuth, async (req, res) => {
+  try {
+    const doctors = await User.find({ userType: 'doctor' }).select('-password');
+    res.json(doctors);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching doctors' });
+  }
+});
+
+// Get available time slots for a doctor on a specific date
+app.get('/api/doctors/:doctorId/availability/:date', async (req, res) => {
+  try {
+    const { doctorId, date } = req.params;
+    
+    // Get all booked appointments for this doctor on this date
+    const bookedAppointments = await Appointment.find({
+      doctorId,
+      date,
+      status: { $ne: 'cancelled' }
+    }).select('time');
+    
+    const bookedTimes = bookedAppointments.map(apt => apt.time);
+    
+    // Extended time slots with more options
+    const allTimeSlots = [
+      '8:00 AM', '8:30 AM', '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', 
+      '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM',
+      '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM', '4:00 PM', '4:30 PM',
+      '5:00 PM', '5:30 PM', '6:00 PM', '6:30 PM', '7:00 PM', '7:30 PM'
+    ];
+    
+    // Filter out booked time slots first
+    let availableTimeSlots = allTimeSlots.filter(time => !bookedTimes.includes(time));
+    
+    const selectedDate = new Date(date);
+    const today = new Date();
+    
+    // If the selected date is today, filter out past time slots
+    if (selectedDate.toDateString() === today.toDateString()) {
+      const currentHour = today.getHours();
+      const currentMinute = today.getMinutes();
+      
+      console.log(`=== TIME FILTERING DEBUG ===`);
+      console.log(`Server current time: ${today.toLocaleString()}`);
+      console.log(`Server timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
+      console.log(`Server ISO time: ${today.toISOString()}`);
+      console.log(`Current hour: ${currentHour}, Current minute: ${currentMinute}`);
+      console.log(`Selected date: ${selectedDate.toDateString()}`);
+      console.log(`Today: ${today.toDateString()}`);
+      console.log(`Total available slots before filtering: ${availableTimeSlots.length}`);
+      
+      // If it's past 6 PM or if it's very late (past 10 PM), return empty array
+      if (currentHour >= 22) {
+        console.log(`It's past 10 PM (${currentHour}:${currentMinute}), no slots available for today`);
+        availableTimeSlots = [];
+      } else if (currentHour >= 18) {
+        console.log(`It's past 6 PM (${currentHour}:${currentMinute}), no more slots available for today`);
+        availableTimeSlots = [];
+      } else {
+        availableTimeSlots = availableTimeSlots.filter(timeSlot => {
+          const [time, period] = timeSlot.split(' ');
+          const [hours, minutes] = time.split(':').map(Number);
+          
+          let slotHour = hours;
+          if (period === 'PM' && hours !== 12) {
+            slotHour += 12;
+          } else if (period === 'AM' && hours === 12) {
+            slotHour = 0;
+          }
+          
+          // Add minutes to the slot time for comparison
+          const slotMinutes = minutes || 0;
+          const slotTotalMinutes = slotHour * 60 + slotMinutes;
+          const currentTotalMinutes = currentHour * 60 + currentMinute;
+          
+          // Only show slots that are at least 1 hour (60 minutes) in the future
+          const isAvailable = slotTotalMinutes > currentTotalMinutes + 60;
+          
+          console.log(`Time slot: ${timeSlot} -> ${slotHour}:${slotMinutes} (${slotTotalMinutes} mins) vs Current: ${currentHour}:${currentMinute} (${currentTotalMinutes} mins) -> Available: ${isAvailable}`);
+          
+          return isAvailable;
+        });
+      }
+      
+      console.log(`Available slots after filtering: ${availableTimeSlots.length}`, availableTimeSlots);
+      console.log(`=== END TIME FILTERING DEBUG ===`);
+    }
+    
+    res.json({
+      date,
+      doctorId,
+      availableTimeSlots,
+      bookedTimeSlots: bookedTimes
+    });
+  } catch (error) {
+    console.error('Error fetching doctor availability:', error);
+    res.status(500).json({ message: 'Error fetching availability' });
+  }
+});
+
+// Book appointment
+app.post('/api/appointments', authenticateToken, async (req, res) => {
+  try {
+    const { doctorId, date, time, notes } = req.body;
+    
+    // Debug logging
+    console.log('Booking appointment for user:', req.user);
+    console.log('Request body:', req.body);
+    
+    // Find the doctor by ID
+    const doctor = await User.findById(doctorId);
+    if (!doctor || doctor.userType !== 'doctor') {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+
+    // Check if the time slot is already booked for this doctor
+    const existingAppointment = await Appointment.findOne({
+      doctorId,
+      date,
+      time,
+      status: { $ne: 'cancelled' } // Exclude cancelled appointments
+    });
+
+    if (existingAppointment) {
+      return res.status(409).json({ 
+        message: 'This time slot is already booked. Please choose a different time.' 
+      });
+    }
+
+    const appointment = new Appointment({
+      patientId: req.user._id, // Use ObjectId directly
+      patientName: req.user.firstName + ' ' + req.user.lastName,
+      doctorId: doctorId, // This should already be an ObjectId string
+      doctorName: doctor.firstName + ' ' + doctor.lastName,
+      date,
+      time,
+      notes,
+      status: 'scheduled'
+    });
+
+    await appointment.save();
+    console.log('Appointment saved successfully:', appointment);
+    res.status(201).json(appointment);
+  } catch (error) {
+    console.error('Appointment booking error:', error);
+    res.status(500).json({ message: 'Error booking appointment', error: error.message });
+  }
+});
+
+// List appointments for a user (patient or doctor)
+app.get('/api/appointments', authenticateToken, async (req, res) => {
+  try {
+    let result = [];
+    console.log('Fetching appointments for user:', req.user._id, 'userType:', req.user.userType);
+    
+    const userId = req.user._id.toString();
+    
+    if (req.user.userType === 'patient') {
+      // Search for appointments with both string and ObjectId formats
+      result = await Appointment.find({ 
+        $or: [
+          { patientId: userId },
+          { patientId: req.user._id }
+        ],
+        status: { $ne: 'cancelled' } // Exclude cancelled appointments
+      });
+    } else if (req.user.userType === 'doctor') {
+      // Search for appointments with both string and ObjectId formats
+      result = await Appointment.find({ 
+        $or: [
+          { doctorId: userId },
+          { doctorId: req.user._id }
+        ],
+        status: { $ne: 'cancelled' } // Exclude cancelled appointments
+      });
+    }
+    
+    console.log('Found appointments:', result.length);
+    console.log('Appointments data:', result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Cancel appointment
+app.delete('/api/appointments/:id', authenticateToken, async (req, res) => {
+  try {
+    const appointmentId = req.params.id;
+    
+    // Find the appointment
+    const appointment = await Appointment.findById(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+    
+    // Check if the user owns this appointment (for patients) or is the assigned doctor
+    if (req.user.userType === 'patient' && appointment.patientId !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You can only cancel your own appointments' });
+    }
+    
+    if (req.user.userType === 'doctor' && appointment.doctorId !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You can only cancel appointments assigned to you' });
+    }
+    
+    // Update appointment status to cancelled instead of deleting
+    appointment.status = 'cancelled';
+    await appointment.save();
+    
+    console.log('Appointment cancelled:', appointmentId);
+    res.json({ message: 'Appointment cancelled successfully' });
+  } catch (error) {
+    console.error('Error cancelling appointment:', error);
+    res.status(500).json({ message: 'Error cancelling appointment' });
+  }
+});
+
+// Register endpoint
+app.post('/api/register', async (req, res) => {
+  const { userType, firstName, lastName, gender, email, password } = req.body;
+  
+  // Validate required fields
+  if (!userType || !firstName || !lastName || !gender || !email || !password) {
+    return res.status(400).json({ 
+      message: 'Missing required fields',
+      required: ['userType', 'firstName', 'lastName', 'gender', 'email', 'password']
+    });
+  }
+  
+  // Validate userType
+  if (!['patient', 'doctor'].includes(userType)) {
+    return res.status(400).json({ message: 'Invalid userType. Must be either "patient" or "doctor"' });
+  }
+  
+  // Validate gender
+  if (!['male', 'female', 'other'].includes(gender)) {
+    return res.status(400).json({ message: 'Invalid gender. Must be either "male", "female", or "other"' });
+  }
+  
+  // Validate password length
+  if (password.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+  }
+  
+  try {
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim(), userType });
+    if (existingUser) {
+      return res.status(409).json({ message: 'User already exists with this email and user type' });
+    }
+    
+    // Create new user (password will be hashed by the pre-save middleware)
+    const user = new User({ 
+      userType, 
+      firstName: firstName.trim(), 
+      lastName: lastName.trim(),
+      gender, 
+      email: email.toLowerCase().trim(), 
+      password 
+    });
+    await user.save();
+
+    // Create corresponding Patient or Doctor record
+    if (userType === 'patient') {
+      const patient = new Patient({
+        userId: user._id,
+        medicalHistory: {
+          allergies: [],
+          chronicConditions: [],
+          medications: [],
+          surgeries: []
+        },
+        appointments: [],
+        prescriptions: [],
+        testResults: []
+      });
+      await patient.save();
+    } else if (userType === 'doctor') {
+      const doctor = new Doctor({
+        userId: user._id,
+        specialty: user.specialty || 'General Medicine',
+        subSpecialties: [],
+        education: [],
+        experience: 0,
+        certifications: [],
+        workingHours: {
+          monday: { start: '9:00 AM', end: '5:00 PM', available: true },
+          tuesday: { start: '9:00 AM', end: '5:00 PM', available: true },
+          wednesday: { start: '9:00 AM', end: '5:00 PM', available: true },
+          thursday: { start: '9:00 AM', end: '5:00 PM', available: true },
+          friday: { start: '9:00 AM', end: '5:00 PM', available: true },
+          saturday: { start: '9:00 AM', end: '1:00 PM', available: true },
+          sunday: { start: '9:00 AM', end: '1:00 PM', available: false }
+        },
+        consultationFee: 100,
+        appointments: [],
+        prescriptions: [],
+        availability: []
+      });
+      await doctor.save();
+    }
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id, email: user.email, userType: user.userType },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' } // Token expires in 7 days
+    );
+    
+    res.status(201).json({ 
+      message: 'User registered successfully',
+      token,
+      user: {
+        id: user._id,
+        userType: user.userType,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        fullName: user.fullName,
+        gender: user.gender,
+        email: user.email,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ message: 'Server error during registration', error: error.message });
+  }
+});
+
+// Login endpoint
+app.post('/api/login', async (req, res) => {
+  const { userType, email, password } = req.body;
+  
+  if (!userType || !email || !password) {
+    return res.status(400).json({ message: 'Missing required fields' });
+  }
+  
+  try {
+    // Find user in database
+    const user = await User.findOne({ email: email.toLowerCase().trim(), userType });
+    
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+    
+    // Compare password using the instance method
+    const isPasswordValid = await user.comparePassword(password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user._id, email: user.email, userType: user.userType },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' } // Token expires in 7 days
+    );
+    
+    res.json({ 
+      message: 'Login successful',
+      token,
+      user: {
+        id: user._id,
+        userType: user.userType,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        fullName: user.fullName,
+        gender: user.gender,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error during login', error: error.message });
+  }
+});
+
+// Get current user (protected route)
+app.get('/api/me', authenticateToken, async (req, res) => {
+  try {
+    res.json({
+      user: {
+        id: req.user._id,
+        userType: req.user.userType,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        fullName: req.user.fullName,
+        gender: req.user.gender,
+        email: req.user.email
+      }
+    });
+  } catch (error) {
+    console.error('Get current user error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+const PORT = process.env.PORT || 5001;
+
+// Import feature routes after defining the data models
+const testRoutes = require('./testRoutes');
+const medicineRoutes = require('./medicineRoutes');
+const doctorRoutes = require('./doctorRoutes');
+const patientRoutes = require('./patientRoutes');
+
+app.use('/api', testRoutes);
+app.use('/api', medicineRoutes);
+app.use('/api', doctorRoutes);
+app.use('/api', patientRoutes);
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  res.status(200).json({ 
+    status: 'OK',
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+    database: {
+      status: dbStatus,
+      message: dbStatus === 'connected' ? 'Database connection successful' : 'Database connection failed'
+    }
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
