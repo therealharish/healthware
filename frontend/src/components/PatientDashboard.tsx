@@ -1,7 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Pill, TestTube, User, Phone } from 'lucide-react';
+import { Calendar, Pill, TestTube, User, Phone, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { appointmentApi } from '../utils/api';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 
 interface PatientDashboardProps {
   onNavigate: (page: string) => void;
@@ -12,6 +22,13 @@ export default function PatientDashboard({ onNavigate }: PatientDashboardProps) 
   const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Dialog states
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState<string | null>(null);
+  const [dialogMessage, setDialogMessage] = useState('');
 
   // Fetch user's appointments
   useEffect(() => {
@@ -23,6 +40,11 @@ export default function PatientDashboard({ onNavigate }: PatientDashboardProps) 
         console.log('Fetching appointments for user:', user);
         const response = await appointmentApi.getAppointments();
         console.log('Received appointments:', response);
+        console.log('Number of appointments:', response.length);
+        if (response.length > 0) {
+          console.log('First appointment:', response[0]);
+          console.log('Appointment statuses:', response.map((apt: any) => apt.status));
+        }
         setAppointments(response);
         setError(null);
       } catch (err) {
@@ -38,23 +60,30 @@ export default function PatientDashboard({ onNavigate }: PatientDashboardProps) 
 
   // Cancel appointment function
   const handleCancelAppointment = async (appointmentId: string) => {
-    if (!confirm('Are you sure you want to cancel this appointment?')) {
-      return;
-    }
-
-    try {
-      await appointmentApi.cancelAppointment(appointmentId);
-      // Refresh appointments list
-      const response = await appointmentApi.getAppointments();
-      setAppointments(response);
-      alert('Appointment cancelled successfully!');
-    } catch (err) {
-      console.error('Error cancelling appointment:', err);
-      alert('Failed to cancel appointment. Please try again.');
-    }
+    setAppointmentToCancel(appointmentId);
+    setShowCancelDialog(true);
   };
 
-  // Helper function to get display date relative to current date
+  const confirmCancelAppointment = async () => {
+    if (!appointmentToCancel) return;
+    
+    try {
+      await appointmentApi.cancelAppointment(appointmentToCancel);
+      
+      // Remove appointment from the list
+      setAppointments(prev => prev.filter(apt => apt._id !== appointmentToCancel));
+      
+      setDialogMessage('Your appointment has been cancelled successfully.');
+      setShowSuccessDialog(true);
+    } catch (err) {
+      console.error('Error cancelling appointment:', err);
+      setDialogMessage('Failed to cancel appointment. Please try again.');
+      setShowErrorDialog(true);
+    } finally {
+      setShowCancelDialog(false);
+      setAppointmentToCancel(null);
+    }
+  };  // Helper function to get display date relative to current date
   const getDisplayDate = (appointmentDate: string) => {
     const today = new Date();
     const tomorrow = new Date(today);
@@ -83,9 +112,29 @@ export default function PatientDashboard({ onNavigate }: PatientDashboardProps) 
     }
   };
 
-  // Get today's appointment
+  // Separate appointments by status (handle both new and legacy statuses)
+  const pendingRequests = appointments.filter(apt => 
+    apt.status === 'pending' || apt.status === 'scheduled' || (!apt.status && apt._id)
+  );
+  const approvedAppointments = appointments.filter(apt => 
+    apt.status === 'approved' || apt.status === 'completed' || apt.status === 'booked'
+  );
+  const rejectedRequests = appointments.filter(apt => apt.status === 'rejected');
+  
+  // Debug logging
+  console.log('All appointments:', appointments.length);
+  console.log('Pending requests:', pendingRequests.length, pendingRequests);
+  console.log('Approved appointments:', approvedAppointments.length, approvedAppointments);
+  console.log('Rejected requests:', rejectedRequests.length, rejectedRequests);
+
+  // Get today's approved appointment
   const todaysAppointment = appointments.find(apt => {
     const today = new Date();
+    
+    // Only show approved appointments for today
+    if (apt.status !== 'approved' && apt.status !== 'completed') {
+      return false;
+    }
     
     try {
       const aptDate = new Date(apt.date);
@@ -100,6 +149,11 @@ export default function PatientDashboard({ onNavigate }: PatientDashboardProps) 
   const upcomingAppointments = appointments.filter(apt => {
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+    
+    // Only show approved or completed appointments in the upcoming section
+    if (apt.status !== 'approved' && apt.status !== 'completed') {
+      return false;
+    }
     
     try {
       const aptDate = new Date(apt.date);
@@ -220,7 +274,23 @@ export default function PatientDashboard({ onNavigate }: PatientDashboardProps) 
                         <div>
                           <h3 className="font-medium text-gray-900">{appointment.doctorName}</h3>
                           <p className="text-blue-600 text-sm">Doctor</p>
-                          <p className="text-gray-500 text-sm">{appointment.status}</p>
+                          <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                            appointment.status === 'pending' 
+                              ? 'bg-orange-100 text-orange-700'
+                              : appointment.status === 'approved'
+                              ? 'bg-green-100 text-green-700'
+                              : appointment.status === 'rejected'
+                              ? 'bg-red-100 text-red-700'
+                              : appointment.status === 'completed'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {appointment.status === 'pending' && 'Pending Approval'}
+                            {appointment.status === 'approved' && 'Confirmed'}
+                            {appointment.status === 'rejected' && 'Declined'}
+                            {appointment.status === 'completed' && 'Completed'}
+                            {appointment.status === 'scheduled' && 'Scheduled'}
+                          </span>
                         </div>
                       </div>
                       <div className="text-right">
@@ -237,6 +307,155 @@ export default function PatientDashboard({ onNavigate }: PatientDashboardProps) 
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Appointment Requests Status */}
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">My Appointment Requests</h2>
+                <div className="text-sm text-gray-600">
+                  Total: {appointments.length} | 
+                  Pending: {pendingRequests.length} | 
+                  Confirmed: {approvedAppointments.length} | 
+                  Declined: {rejectedRequests.length}
+                </div>
+              </div>
+              
+              {/* Pending Requests */}
+              {pendingRequests.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-medium text-orange-700 mb-4 flex items-center">
+                    <AlertCircle className="w-5 h-5 mr-2" />
+                    Pending Approval ({pendingRequests.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {pendingRequests.map((appointment) => (
+                      <div key={appointment._id} className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
+                              <Clock className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-900">Dr. {appointment.doctorName}</h4>
+                              <p className="text-sm text-gray-600">{getDisplayDate(appointment.date)} at {appointment.time}</p>
+                              <p className="text-xs text-orange-700 font-medium">Waiting for doctor's approval</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleCancelAppointment(appointment._id)}
+                            className="text-red-600 text-sm font-medium hover:text-red-700"
+                          >
+                            Cancel Request
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Approved Appointments */}
+              {approvedAppointments.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-medium text-green-700 mb-4 flex items-center">
+                    <CheckCircle className="w-5 h-5 mr-2" />
+                    Confirmed Appointments ({approvedAppointments.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {approvedAppointments.map((appointment) => (
+                      <div key={appointment._id} className="p-4 bg-green-50 border border-green-200 rounded-xl">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                              appointment.status === 'completed' 
+                                ? 'bg-blue-500' 
+                                : 'bg-green-500'
+                            }`}>
+                              <CheckCircle className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-900">Dr. {appointment.doctorName}</h4>
+                              <p className="text-sm text-gray-600">{getDisplayDate(appointment.date)} at {appointment.time}</p>
+                              <p className={`text-xs font-medium ${
+                                appointment.status === 'completed'
+                                  ? 'text-blue-700'
+                                  : 'text-green-700'
+                              }`}>
+                                {appointment.status === 'completed' ? 'Completed' : 'Confirmed - Ready to visit'}
+                              </p>
+                            </div>
+                          </div>
+                          {appointment.status === 'approved' && (
+                            <button
+                              onClick={() => handleCancelAppointment(appointment._id)}
+                              className="text-red-600 text-sm font-medium hover:text-red-700"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Rejected Requests */}
+              {rejectedRequests.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-medium text-red-700 mb-4 flex items-center">
+                    <XCircle className="w-5 h-5 mr-2" />
+                    Declined Requests ({rejectedRequests.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {rejectedRequests.map((appointment) => (
+                      <div key={appointment._id} className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center">
+                            <XCircle className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <h4 className="font-medium text-gray-900">Dr. {appointment.doctorName}</h4>
+                            <p className="text-sm text-gray-600">{getDisplayDate(appointment.date)} at {appointment.time}</p>
+                            <p className="text-xs text-red-700 font-medium">Request was declined by the doctor</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* No requests at all */}
+              {appointments.length === 0 && !loading && (
+                <div className="text-center py-8">
+                  <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No appointment requests yet</h3>
+                  <p className="text-gray-500 mb-4">Start by booking your first appointment with a doctor.</p>
+                  <button
+                    onClick={() => onNavigate('book-appointment')}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700"
+                  >
+                    Book Appointment
+                  </button>
+                </div>
+              )}
+
+              {/* All requests processed but no current ones */}
+              {appointments.length > 0 && pendingRequests.length === 0 && approvedAppointments.length === 0 && rejectedRequests.length === 0 && (
+                <div className="text-center py-8">
+                  <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No active requests</h3>
+                  <p className="text-gray-500 mb-4">All your appointment requests have been processed.</p>
+                  <button
+                    onClick={() => onNavigate('book-appointment')}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700"
+                  >
+                    Book New Appointment
+                  </button>
                 </div>
               )}
             </div>
@@ -342,6 +561,54 @@ export default function PatientDashboard({ onNavigate }: PatientDashboardProps) 
           </div>
         </div>
       </div>
+
+      {/* Cancel Confirmation Dialog */}
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Appointment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel this appointment? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Appointment</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancelAppointment} className="bg-red-600 hover:bg-red-700">
+              Yes, Cancel
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Success Dialog */}
+      <AlertDialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Success</AlertDialogTitle>
+            <AlertDialogDescription>
+              {dialogMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Error Dialog */}
+      <AlertDialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Error</AlertDialogTitle>
+            <AlertDialogDescription>
+              {dialogMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>Try Again</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

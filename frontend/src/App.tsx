@@ -71,7 +71,7 @@ function AppContent() {
   const renderPage = () => {
     switch (currentPage) {
       case 'home':
-        return <HomePage onNavigate={handleNavigate} />;
+        return <HomePage onNavigate={handleNavigate} isLoggedIn={isAuthenticated} />;
       case 'book-appointment':
         return <BookAppointment onNavigate={handleNavigate} />;
       case 'patient-dashboard':

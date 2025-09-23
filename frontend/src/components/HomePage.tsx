@@ -3,9 +3,10 @@ import { Calendar, Clock, Shield, Smartphone, Users, Zap } from 'lucide-react';
 
 interface HomePageProps {
   onNavigate: (page: string) => void;
+  isLoggedIn?: boolean;
 }
 
-export default function HomePage({ onNavigate }: HomePageProps) {
+export default function HomePage({ onNavigate, isLoggedIn = false }: HomePageProps) {
   const features = [
     {
       icon: Calendar,
@@ -53,19 +54,21 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               Skip the queues, reduce the stress, and focus on what matters most - your health. 
               CareConnect streamlines your entire healthcare journey from booking to treatment.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <button
                 onClick={() => onNavigate('book-appointment')}
                 className="bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-blue-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
               >
                 Book Your Appointment
               </button>
-              <button
-                onClick={() => onNavigate('login')}
-                className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg border-2 border-blue-600 hover:bg-blue-50 transform hover:scale-105 transition-all duration-200"
-              >
-                Sign In
-              </button>
+              {!isLoggedIn && (
+                <button
+                  onClick={() => onNavigate('login')}
+                  className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg border-2 border-blue-600 hover:bg-blue-50 transform hover:scale-105 transition-all duration-200"
+                >
+                  Sign In
+                </button>
+              )}
             </div>
           </div>
         </div>

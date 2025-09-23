@@ -104,6 +104,18 @@ export const appointmentApi = {
       method: 'DELETE',
     });
   },
+
+  approveAppointment: (appointmentId: string) => {
+    return apiRequest(`/appointments/${appointmentId}/approve`, {
+      method: 'PUT',
+    });
+  },
+
+  rejectAppointment: (appointmentId: string) => {
+    return apiRequest(`/appointments/${appointmentId}/reject`, {
+      method: 'PUT',
+    });
+  },
 };
 
 /**

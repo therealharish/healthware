@@ -312,9 +312,9 @@ export default function BookAppointment({ onNavigate }: BookAppointmentProps) {
         <AlertDialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Appointment Booked Successfully!</AlertDialogTitle>
+              <AlertDialogTitle>Request Sent Successfully!</AlertDialogTitle>
               <AlertDialogDescription>
-                Your appointment has been confirmed. You will receive a confirmation email shortly with all the details.
+                Your appointment request has been sent to the doctor for approval. You will be notified once the doctor approves or declines your request. You can check the status in your dashboard.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -322,7 +322,7 @@ export default function BookAppointment({ onNavigate }: BookAppointmentProps) {
                 setShowSuccessDialog(false);
                 onNavigate('patient-dashboard');
               }}>
-                Go to Dashboard
+                View My Requests
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

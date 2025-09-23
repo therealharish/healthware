@@ -40,8 +40,8 @@ const AppointmentSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ['scheduled', 'booked', 'completed', 'cancelled', 'no-show'],
-    default: 'scheduled'
+    enum: ['pending', 'approved', 'rejected', 'scheduled', 'booked', 'completed', 'cancelled', 'no-show'],
+    default: 'pending'
   },
   appointmentType: {
     type: String,

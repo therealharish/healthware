@@ -93,11 +93,11 @@ app.get('/api/doctors/:doctorId/availability/:date', async (req, res) => {
   try {
     const { doctorId, date } = req.params;
     
-    // Get all booked appointments for this doctor on this date
+    // Get all booked appointments for this doctor on this date (only approved appointments block time slots)
     const bookedAppointments = await Appointment.find({
       doctorId,
       date,
-      status: { $ne: 'cancelled' }
+      status: 'approved' // Only approved appointments block the time slot
     }).select('time');
     
     const bookedTimes = bookedAppointments.map(apt => apt.time);
@@ -194,12 +194,12 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Doctor not found' });
     }
 
-    // Check if the time slot is already booked for this doctor
+    // Check if the time slot is already approved for this doctor
     const existingAppointment = await Appointment.findOne({
       doctorId,
       date,
       time,
-      status: { $ne: 'cancelled' } // Exclude cancelled appointments
+      status: 'approved' // Only check for approved appointments when booking
     });
 
     if (existingAppointment) {
@@ -211,12 +211,13 @@ app.post('/api/appointments', authenticateToken, async (req, res) => {
     const appointment = new Appointment({
       patientId: req.user._id, // Use ObjectId directly
       patientName: req.user.firstName + ' ' + req.user.lastName,
+      patientEmail: req.user.email, // Add patient email
       doctorId: doctorId, // This should already be an ObjectId string
       doctorName: doctor.firstName + ' ' + doctor.lastName,
       date,
       time,
       notes,
-      status: 'scheduled'
+      status: 'pending' // Changed from 'scheduled' to 'pending'
     });
 
     await appointment.save();
@@ -238,12 +239,13 @@ app.get('/api/appointments', authenticateToken, async (req, res) => {
     
     if (req.user.userType === 'patient') {
       // Search for appointments with both string and ObjectId formats
+      // Include ALL appointments for patients so they can see request status
       result = await Appointment.find({ 
         $or: [
           { patientId: userId },
           { patientId: req.user._id }
-        ],
-        status: { $ne: 'cancelled' } // Exclude cancelled appointments
+        ]
+        // Don't filter by status - patients should see all their requests
       });
     } else if (req.user.userType === 'doctor') {
       // Search for appointments with both string and ObjectId formats
@@ -252,7 +254,7 @@ app.get('/api/appointments', authenticateToken, async (req, res) => {
           { doctorId: userId },
           { doctorId: req.user._id }
         ],
-        status: { $ne: 'cancelled' } // Exclude cancelled appointments
+        status: { $nin: ['cancelled', 'rejected'] } // Exclude cancelled and rejected appointments
       });
     }
     
@@ -269,19 +271,51 @@ app.delete('/api/appointments/:id', authenticateToken, async (req, res) => {
   try {
     const appointmentId = req.params.id;
     
+    console.log('=== APPOINTMENT CANCELLATION DEBUG ===');
+    console.log('User:', req.user);
+    console.log('Appointment ID:', appointmentId);
+    
     // Find the appointment
     const appointment = await Appointment.findById(appointmentId);
     if (!appointment) {
       return res.status(404).json({ message: 'Appointment not found' });
     }
     
+    console.log('Found appointment:', appointment);
+    console.log('Appointment patientId:', appointment.patientId, 'type:', typeof appointment.patientId);
+    console.log('User _id:', req.user._id, 'type:', typeof req.user._id);
+    
     // Check if the user owns this appointment (for patients) or is the assigned doctor
-    if (req.user.userType === 'patient' && appointment.patientId !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'You can only cancel your own appointments' });
+    if (req.user.userType === 'patient') {
+      const userIdString = req.user._id.toString();
+      const appointmentPatientId = appointment.patientId ? appointment.patientId.toString() : null;
+      
+      console.log('Patient comparison:', { 
+        appointmentPatientId, 
+        userIdString, 
+        match: appointmentPatientId === userIdString 
+      });
+      
+      if (!appointmentPatientId || appointmentPatientId !== userIdString) {
+        console.log('Patient ID mismatch - access denied');
+        return res.status(403).json({ message: 'You can only cancel your own appointments' });
+      }
     }
     
-    if (req.user.userType === 'doctor' && appointment.doctorId !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'You can only cancel appointments assigned to you' });
+    if (req.user.userType === 'doctor') {
+      const userIdString = req.user._id.toString();
+      const appointmentDoctorId = appointment.doctorId ? appointment.doctorId.toString() : null;
+      
+      console.log('Doctor comparison:', { 
+        appointmentDoctorId, 
+        userIdString, 
+        match: appointmentDoctorId === userIdString 
+      });
+      
+      if (!appointmentDoctorId || appointmentDoctorId !== userIdString) {
+        console.log('Doctor ID mismatch - access denied');
+        return res.status(403).json({ message: 'You can only cancel appointments assigned to you' });
+      }
     }
     
     // Update appointment status to cancelled instead of deleting
@@ -293,6 +327,111 @@ app.delete('/api/appointments/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error cancelling appointment:', error);
     res.status(500).json({ message: 'Error cancelling appointment' });
+  }
+});
+
+// Approve appointment request
+app.put('/api/appointments/:id/approve', authenticateToken, async (req, res) => {
+  try {
+    const appointmentId = req.params.id;
+    
+    // Only doctors can approve appointments
+    if (req.user.userType !== 'doctor') {
+      return res.status(403).json({ message: 'Only doctors can approve appointments' });
+    }
+    
+    // Find the appointment
+    const appointment = await Appointment.findById(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+    
+    // Check if this doctor owns this appointment
+    if (appointment.doctorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You can only approve appointments assigned to you' });
+    }
+    
+    // Check if appointment is still pending
+    if (appointment.status !== 'pending') {
+      return res.status(400).json({ message: 'This appointment is no longer pending approval' });
+    }
+    
+    // Check if there are any other approved appointments for this patient at the same time
+    const conflictingAppointment = await Appointment.findOne({
+      patientId: appointment.patientId,
+      date: appointment.date,
+      time: appointment.time,
+      status: 'approved',
+      _id: { $ne: appointmentId }
+    });
+    
+    if (conflictingAppointment) {
+      // Reject this appointment as there's already an approved one
+      appointment.status = 'rejected';
+      await appointment.save();
+      return res.status(409).json({ 
+        message: 'Patient already has an approved appointment at this time with another doctor' 
+      });
+    }
+    
+    // Approve this appointment
+    appointment.status = 'approved';
+    await appointment.save();
+    
+    // Cancel all other pending appointments for this patient at the same date and time
+    await Appointment.updateMany({
+      patientId: appointment.patientId,
+      date: appointment.date,
+      time: appointment.time,
+      status: 'pending',
+      _id: { $ne: appointmentId }
+    }, {
+      status: 'rejected'
+    });
+    
+    console.log('Appointment approved:', appointmentId);
+    res.json({ message: 'Appointment approved successfully', appointment });
+  } catch (error) {
+    console.error('Error approving appointment:', error);
+    res.status(500).json({ message: 'Error approving appointment' });
+  }
+});
+
+// Reject appointment request
+app.put('/api/appointments/:id/reject', authenticateToken, async (req, res) => {
+  try {
+    const appointmentId = req.params.id;
+    
+    // Only doctors can reject appointments
+    if (req.user.userType !== 'doctor') {
+      return res.status(403).json({ message: 'Only doctors can reject appointments' });
+    }
+    
+    // Find the appointment
+    const appointment = await Appointment.findById(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+    
+    // Check if this doctor owns this appointment
+    if (appointment.doctorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You can only reject appointments assigned to you' });
+    }
+    
+    // Check if appointment is still pending
+    if (appointment.status !== 'pending') {
+      return res.status(400).json({ message: 'This appointment is no longer pending approval' });
+    }
+    
+    // Reject the appointment
+    appointment.status = 'rejected';
+    await appointment.save();
+    
+    console.log('Appointment rejected:', appointmentId);
+    res.json({ message: 'Appointment rejected successfully', appointment });
+  } catch (error) {
+    console.error('Error rejecting appointment:', error);
+    res.status(500).json({ message: 'Error rejecting appointment' });
   }
 });
 
