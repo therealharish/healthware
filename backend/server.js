@@ -435,6 +435,44 @@ app.put('/api/appointments/:id/reject', authenticateToken, async (req, res) => {
   }
 });
 
+// Complete appointment (mark as completed)
+app.put('/api/appointments/:id/complete', authenticateToken, async (req, res) => {
+  try {
+    const appointmentId = req.params.id;
+    
+    // Only doctors can complete appointments
+    if (req.user.userType !== 'doctor') {
+      return res.status(403).json({ message: 'Only doctors can complete appointments' });
+    }
+    
+    // Find the appointment
+    const appointment = await Appointment.findById(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+    
+    // Check if this doctor owns this appointment
+    if (appointment.doctorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'You can only complete appointments assigned to you' });
+    }
+    
+    // Check if appointment is approved (can complete)
+    if (appointment.status !== 'approved') {
+      return res.status(400).json({ message: 'Only approved appointments can be marked as completed' });
+    }
+    
+    // Complete the appointment
+    appointment.status = 'completed';
+    await appointment.save();
+    
+    console.log('Appointment completed:', appointmentId);
+    res.json({ message: 'Appointment completed successfully', appointment });
+  } catch (error) {
+    console.error('Error completing appointment:', error);
+    res.status(500).json({ message: 'Error completing appointment' });
+  }
+});
+
 // Register endpoint
 app.post('/api/register', async (req, res) => {
   const { userType, firstName, lastName, gender, email, password } = req.body;
@@ -616,6 +654,27 @@ app.get('/api/me', authenticateToken, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5001;
+
+// Get prescriptions for the authenticated patient
+app.get('/api/my-prescriptions', authenticateToken, async (req, res) => {
+  try {
+    // Only patients can access their prescriptions
+    if (req.user.userType !== 'patient') {
+      return res.status(403).json({ message: 'Only patients can access this endpoint' });
+    }
+    
+    // Find prescriptions by patient email
+    const prescriptions = await Prescription.find({ 
+      patientEmail: req.user.email 
+    }).sort({ createdAt: -1 }); // Most recent first
+    
+    console.log(`Found ${prescriptions.length} prescriptions for patient: ${req.user.email}`);
+    res.json(prescriptions);
+  } catch (error) {
+    console.error('Error fetching patient prescriptions:', error);
+    res.status(500).json({ message: 'Error fetching prescriptions' });
+  }
+});
 
 // Import feature routes after defining the data models
 const testRoutes = require('./testRoutes');

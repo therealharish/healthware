@@ -165,11 +165,50 @@ export const testApi = {
 /**
  * Doctor-related API calls (prescriptions)
  */
+/**
+ * Prescription-related API calls
+ */
+export const prescriptionApi = {
+  // Get prescriptions for the current patient
+  getMyPrescriptions: () => {
+    return apiRequest('/my-prescriptions');
+  },
+  
+  // Get prescription details by ID
+  getPrescriptionById: (prescriptionId: string) => {
+    return apiRequest(`/prescriptions/${prescriptionId}`);
+  },
+};
+
+/**
+ * Doctor-related API calls (prescriptions)
+ */
 export const doctorApi = {
   addPrescription: (doctorEmail: string, patientEmail: string, prescription: string) => {
     return apiRequest('/prescriptions', {
       method: 'POST',
       body: JSON.stringify({ doctorEmail, patientEmail, prescription }),
+    });
+  },
+  
+  // Enhanced prescription API for structured data
+  addStructuredPrescription: (prescriptionData: {
+    patientEmail: string;
+    doctorEmail: string;
+    appointmentId?: string;
+    diagnosis: string;
+    medications: Array<{
+      name: string;
+      dosage: string;
+      frequency: string;
+      duration: string;
+      instructions?: string;
+    }>;
+    notes?: string;
+  }) => {
+    return apiRequest('/prescriptions/structured', {
+      method: 'POST',
+      body: JSON.stringify(prescriptionData),
     });
   },
   
@@ -179,5 +218,12 @@ export const doctorApi = {
   
   getPrescriptionsByDoctor: (doctorEmail: string) => {
     return apiRequest(`/doctor-prescriptions?doctorEmail=${doctorEmail}`);
+  },
+  
+  // Mark appointment as completed with prescription
+  completeAppointmentWithPrescription: (appointmentId: string) => {
+    return apiRequest(`/appointments/${appointmentId}/complete`, {
+      method: 'PUT',
+    });
   },
 };

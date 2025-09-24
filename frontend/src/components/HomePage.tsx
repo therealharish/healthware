@@ -1,5 +1,6 @@
 import React from 'react';
-import { Calendar, Clock, Shield, Smartphone, Users, Zap } from 'lucide-react';
+import { Calendar, Clock, Shield, Smartphone, Users, Zap, UserPlus, FileText, Activity, BarChart3 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface HomePageProps {
   onNavigate: (page: string) => void;
@@ -7,7 +8,8 @@ interface HomePageProps {
 }
 
 export default function HomePage({ onNavigate, isLoggedIn = false }: HomePageProps) {
-  const features = [
+  const { user } = useAuth();
+  const patientFeatures = [
     {
       icon: Calendar,
       title: 'Easy Appointment Booking',
@@ -40,36 +42,94 @@ export default function HomePage({ onNavigate, isLoggedIn = false }: HomePagePro
     },
   ];
 
+  const doctorFeatures = [
+    {
+      icon: Calendar,
+      title: 'Appointment Management',
+      description: 'View and manage your daily appointments with ease. Access patient information and notes before consultations.',
+    },
+    {
+      icon: FileText,
+      title: 'Digital Prescriptions',
+      description: 'Create digital prescriptions with our comprehensive medicine database. Reduce errors and improve patient safety.',
+    },
+    {
+      icon: Shield,
+      title: 'Secure Patient Records',
+      description: 'Access complete patient medical history securely. Make informed decisions with comprehensive health data.',
+    },
+    {
+      icon: Activity,
+      title: 'Treatment Tracking',
+      description: 'Monitor patient progress and treatment outcomes. Keep detailed records of consultations and procedures.',
+    },
+    {
+      icon: Users,
+      title: 'Patient Communication',
+      description: 'Streamlined communication with patients. Send updates, reminders, and follow-up instructions digitally.',
+    },
+    {
+      icon: BarChart3,
+      title: 'Practice Analytics',
+      description: 'Track your practice performance with detailed analytics. Monitor patient satisfaction and treatment outcomes.',
+    },
+  ];
+
+  const features = user?.userType === 'doctor' ? doctorFeatures : patientFeatures;
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-blue-50 via-white to-green-50 pt-16 pb-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
-              Healthcare Made
-              <span className="bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent"> Simple</span>
-            </h1>
-            <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto leading-relaxed">
-              Skip the queues, reduce the stress, and focus on what matters most - your health. 
-              CareConnect streamlines your entire healthcare journey from booking to treatment.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <button
-                onClick={() => onNavigate('book-appointment')}
-                className="bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-blue-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
-              >
-                Book Your Appointment
-              </button>
-              {!isLoggedIn && (
-                <button
-                  onClick={() => onNavigate('login')}
-                  className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg border-2 border-blue-600 hover:bg-blue-50 transform hover:scale-105 transition-all duration-200"
-                >
-                  Sign In
-                </button>
-              )}
-            </div>
+            {user?.userType === 'doctor' ? (
+              <>
+                <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
+                  Practice Management Made
+                  <span className="bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent"> Simple</span>
+                </h1>
+                <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto leading-relaxed">
+                  Streamline your practice with digital tools designed for modern healthcare. 
+                  Manage appointments, create prescriptions, and track patient care efficiently.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                  <button
+                    onClick={() => onNavigate('doctor-dashboard')}
+                    className="bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-blue-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
+                  >
+                    Go to Dashboard
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
+                  Healthcare Made
+                  <span className="bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent"> Simple</span>
+                </h1>
+                <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto leading-relaxed">
+                  Skip the queues, reduce the stress, and focus on what matters most - your health. 
+                  CareConnect streamlines your entire healthcare journey from booking to treatment.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                  <button
+                    onClick={() => onNavigate('book-appointment')}
+                    className="bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-blue-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
+                  >
+                    Book Your Appointment
+                  </button>
+                  {!isLoggedIn && (
+                    <button
+                      onClick={() => onNavigate('login')}
+                      className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg border-2 border-blue-600 hover:bg-blue-50 transform hover:scale-105 transition-all duration-200"
+                    >
+                      Sign In
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -79,10 +139,13 @@ export default function HomePage({ onNavigate, isLoggedIn = false }: HomePagePro
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Why Choose CareConnect?
+              {user?.userType === 'doctor' ? 'Why Doctors Choose CareConnect?' : 'Why Choose CareConnect?'}
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              We've reimagined healthcare to be more accessible, efficient, and stress-free for everyone.
+              {user?.userType === 'doctor' 
+                ? "We've built a comprehensive platform to streamline your practice and enhance patient care."
+                : "We've reimagined healthcare to be more accessible, efficient, and stress-free for everyone."
+              }
             </p>
           </div>
 
@@ -109,18 +172,37 @@ export default function HomePage({ onNavigate, isLoggedIn = false }: HomePagePro
       {/* CTA Section */}
       <section className="py-24 bg-gradient-to-r from-blue-600 to-green-600">
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
-            Ready to Transform Your Healthcare Experience?
-          </h2>
-          <p className="text-xl text-blue-100 mb-8">
-            Join thousands of patients who have already simplified their healthcare journey with CareConnect.
-          </p>
-          <button
-            onClick={() => onNavigate('book-appointment')}
-            className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-lg"
-          >
-            Get Started Today
-          </button>
+          {user?.userType === 'doctor' ? (
+            <>
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+                Ready to Enhance Your Practice?
+              </h2>
+              <p className="text-xl text-blue-100 mb-8">
+                Join healthcare professionals who are already providing better patient care with CareConnect.
+              </p>
+              <button
+                onClick={() => onNavigate('doctor-dashboard')}
+                className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-lg"
+              >
+                Go to Dashboard
+              </button>
+            </>
+          ) : (
+            <>
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+                Ready to Transform Your Healthcare Experience?
+              </h2>
+              <p className="text-xl text-blue-100 mb-8">
+                Join thousands of patients who have already simplified their healthcare journey with CareConnect.
+              </p>
+              <button
+                onClick={() => onNavigate('book-appointment')}
+                className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-lg"
+              >
+                Get Started Today
+              </button>
+            </>
+          )}
         </div>
       </section>
     </div>

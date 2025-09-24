@@ -53,16 +53,19 @@ export default function Header({ currentPage, onNavigate, isLoggedIn, userType, 
             >
               Home
             </button>
-            <button
-              onClick={() => onNavigate('book-appointment')}
-              className={`px-3 py-2 text-sm font-medium transition-colors ${
-                currentPage === 'book-appointment'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-blue-600'
-              }`}
-            >
-              Book Appointment
-            </button>
+            {/* Only show Book Appointment for patients or non-logged in users */}
+            {(!isLoggedIn || userType === 'patient') && (
+              <button
+                onClick={() => onNavigate('book-appointment')}
+                className={`px-3 py-2 text-sm font-medium transition-colors ${
+                  currentPage === 'book-appointment'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-600 hover:text-blue-600'
+                }`}
+              >
+                Book Appointment
+              </button>
+            )}
             {isLoggedIn && (
               <>
                 <button
@@ -75,26 +78,31 @@ export default function Header({ currentPage, onNavigate, isLoggedIn, userType, 
                 >
                   Dashboard
                 </button>
-                <button
-                  onClick={() => onNavigate('medicines')}
-                  className={`px-3 py-2 text-sm font-medium transition-colors ${
-                    currentPage === 'medicines'
-                      ? 'text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-600 hover:text-blue-600'
-                  }`}
-                >
-                  Medicines
-                </button>
-                <button
-                  onClick={() => onNavigate('tests')}
-                  className={`px-3 py-2 text-sm font-medium transition-colors ${
-                    currentPage === 'tests'
-                      ? 'text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-600 hover:text-blue-600'
-                  }`}
-                >
-                  Tests
-                </button>
+                {/* Medicines and Tests are patient-specific features */}
+                {userType === 'patient' && (
+                  <>
+                    <button
+                      onClick={() => onNavigate('medicines')}
+                      className={`px-3 py-2 text-sm font-medium transition-colors ${
+                        currentPage === 'medicines'
+                          ? 'text-blue-600 border-b-2 border-blue-600'
+                          : 'text-gray-600 hover:text-blue-600'
+                      }`}
+                    >
+                      Medicines
+                    </button>
+                    <button
+                      onClick={() => onNavigate('tests')}
+                      className={`px-3 py-2 text-sm font-medium transition-colors ${
+                        currentPage === 'tests'
+                          ? 'text-blue-600 border-b-2 border-blue-600'
+                          : 'text-gray-600 hover:text-blue-600'
+                      }`}
+                    >
+                      Tests
+                    </button>
+                  </>
+                )}
               </>
             )}
           </nav>

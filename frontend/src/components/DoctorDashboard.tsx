@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { User, Clock, FileText, CheckCircle, Calendar, Loader, UserCheck, UserX, AlertCircle } from 'lucide-react';
+import { User, Clock, FileText, CheckCircle, Calendar, Loader, UserCheck, UserX, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { appointmentApi, doctorApi } from '../utils/api';
+import { appointmentApi } from '../utils/api';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,7 +14,7 @@ import {
 } from './ui/alert-dialog';
 
 interface DoctorDashboardProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, appointment?: any) => void;
 }
 
 interface Appointment {
@@ -36,8 +36,6 @@ interface Appointment {
 
 export default function DoctorDashboard({ onNavigate }: DoctorDashboardProps) {
   const { user } = useAuth();
-  const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
-  const [prescriptions, setPrescriptions] = useState<{[key: string]: string}>({});
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,11 +47,10 @@ export default function DoctorDashboard({ onNavigate }: DoctorDashboardProps) {
   const [appointmentToReject, setAppointmentToReject] = useState<string | null>(null);
   const [dialogMessage, setDialogMessage] = useState('');
 
-  // Get today's date in YYYY-MM-DD format
-  const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  };
+  // Collapsible state
+  const [isApprovedCollapsed, setIsApprovedCollapsed] = useState(false);
+
+
 
   // Fetch appointments when component mounts
   useEffect(() => {
@@ -79,12 +76,41 @@ export default function DoctorDashboard({ onNavigate }: DoctorDashboardProps) {
     fetchAppointments();
   }, [user]);
 
+  // Helper function to sort appointments by date and time
+  const sortAppointmentsByDateTime = (appointments: Appointment[]) => {
+    return appointments.sort((a, b) => {
+      const dateTimeA = new Date(`${a.date} ${a.time}`).getTime();
+      const dateTimeB = new Date(`${b.date} ${b.time}`).getTime();
+      return dateTimeA - dateTimeB;
+    });
+  };
+
+  // Helper function to format date
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+      return 'Tomorrow';
+    } else {
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'short', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    }
+  };
+
   // Filter appointments that are not cancelled or rejected
   const activeAppointments = appointments.filter(apt => !['cancelled', 'rejected'].includes(apt.status));
   
   // Separate pending requests (all dates) and approved appointments (focus on today/upcoming)
-  const pendingRequests = activeAppointments.filter(apt => apt.status === 'pending');
-  const approvedAppointments = activeAppointments.filter(apt => apt.status === 'approved' || apt.status === 'completed');
+  const pendingRequests = sortAppointmentsByDateTime(activeAppointments.filter(apt => apt.status === 'pending'));
+  const approvedAppointments = sortAppointmentsByDateTime(activeAppointments.filter(apt => apt.status === 'approved' || apt.status === 'completed'));
 
   console.log('Active appointments:', activeAppointments.length);
   console.log('Pending requests:', pendingRequests.length, pendingRequests);
@@ -136,40 +162,7 @@ export default function DoctorDashboard({ onNavigate }: DoctorDashboardProps) {
     }
   };
 
-  const handlePrescriptionSubmit = async (patientId: string) => {
-    if (!prescriptions[patientId] || !user?.email) {
-      return;
-    }
 
-    try {
-      const appointment = approvedAppointments.find(apt => apt._id === patientId);
-      if (!appointment || !appointment.patientEmail) {
-        setDialogMessage('Patient email not found. Cannot save prescription.');
-        setShowErrorDialog(true);
-        return;
-      }
-
-      await doctorApi.addPrescription(
-        user.email, 
-        appointment.patientEmail, 
-        prescriptions[patientId]
-      );
-      
-      // Update appointment status to completed
-      setAppointments(prev => prev.map(apt => 
-        apt._id === patientId ? { ...apt, status: 'completed' as const } : apt
-      ));
-      
-      // Clear the prescription
-      setPrescriptions(prev => ({ ...prev, [patientId]: '' }));
-      setDialogMessage('Prescription saved successfully! Patient will be notified.');
-      setShowSuccessDialog(true);
-    } catch (error) {
-      console.error('Error saving prescription:', error);
-      setDialogMessage('Failed to save prescription. Please try again.');
-      setShowErrorDialog(true);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 py-8">
@@ -225,9 +218,15 @@ export default function DoctorDashboard({ onNavigate }: DoctorDashboardProps) {
                             </div>
                             <div>
                               <h3 className="text-lg font-semibold text-gray-900">{appointment.patientName}</h3>
-                              <div className="flex items-center space-x-2 text-gray-500">
-                                <Clock className="w-4 h-4" />
-                                <span>{appointment.time}</span>
+                              <div className="flex items-center space-x-4 text-gray-500">
+                                <div className="flex items-center space-x-1">
+                                  <Calendar className="w-4 h-4" />
+                                  <span>{formatDate(appointment.date)}</span>
+                                </div>
+                                <div className="flex items-center space-x-1">
+                                  <Clock className="w-4 h-4" />
+                                  <span>{appointment.time}</span>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -274,151 +273,99 @@ export default function DoctorDashboard({ onNavigate }: DoctorDashboardProps) {
 
               {/* Approved Appointments */}
               <div className="bg-white rounded-2xl shadow-lg p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-6">Today's Approved Appointments ({approvedAppointments.length})</h2>
-                {approvedAppointments.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No approved appointments</h3>
-                    <p className="text-gray-500">You have no approved appointments for today.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {approvedAppointments.map((appointment) => (
-                      <div
-                        key={appointment._id}
-                        className={`p-6 rounded-xl border-2 cursor-pointer transition-all ${
-                          selectedPatient === appointment._id
-                            ? 'border-blue-500 bg-blue-50'
-                            : appointment.status === 'completed'
-                            ? 'border-green-200 bg-green-50'
-                            : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                        }`}
-                        onClick={() => setSelectedPatient(appointment._id)}
-                      >
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center space-x-4">
-                            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-green-500 rounded-full flex items-center justify-center">
-                              <User className="w-6 h-6 text-white" />
+                <div 
+                  className="flex items-center justify-between cursor-pointer mb-6"
+                  onClick={() => setIsApprovedCollapsed(!isApprovedCollapsed)}
+                >
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Approved Appointments ({approvedAppointments.length})
+                  </h2>
+                  {isApprovedCollapsed ? (
+                    <ChevronDown className="w-5 h-5 text-gray-500" />
+                  ) : (
+                    <ChevronUp className="w-5 h-5 text-gray-500" />
+                  )}
+                </div>
+                {!isApprovedCollapsed && (
+                  <>
+                    {approvedAppointments.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No approved appointments</h3>
+                        <p className="text-gray-500">You have no approved appointments scheduled.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {approvedAppointments.map((appointment) => (
+                          <div
+                            key={appointment._id}
+                            className={`p-6 rounded-xl border-2 transition-all ${
+                              appointment.status === 'completed'
+                                ? 'border-green-200 bg-green-50'
+                                : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center space-x-4">
+                                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-green-500 rounded-full flex items-center justify-center">
+                                  <User className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                  <h3 className="text-lg font-semibold text-gray-900">{appointment.patientName}</h3>
+                                  <div className="flex items-center space-x-4 text-gray-500">
+                                    <div className="flex items-center space-x-1">
+                                      <Calendar className="w-4 h-4" />
+                                      <span>{formatDate(appointment.date)}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-1">
+                                      <Clock className="w-4 h-4" />
+                                      <span>{appointment.time}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-3">
+                                {appointment.status === 'completed' && (
+                                  <CheckCircle className="w-6 h-6 text-green-600" />
+                                )}
+                                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                  appointment.status === 'completed'
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-blue-100 text-blue-700'
+                                }`}>
+                                  {appointment.status === 'completed' ? 'Completed' : 'Approved'}
+                                </span>
+                                <button
+                                  onClick={() => onNavigate('prescription-portal', appointment)}
+                                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center"
+                                >
+                                  <FileText className="w-4 h-4 mr-1" />
+                                  {appointment.status === 'completed' ? 'View' : 'Prescribe'}
+                                </button>
+                              </div>
                             </div>
-                            <div>
-                              <h3 className="text-lg font-semibold text-gray-900">{appointment.patientName}</h3>
-                              <div className="flex items-center space-x-2 text-gray-500">
-                                <Clock className="w-4 h-4" />
-                                <span>{appointment.time}</span>
+                            
+                            <div className="space-y-3">
+                              <div>
+                                <h4 className="font-medium text-gray-900 mb-1">Notes:</h4>
+                                <p className="text-gray-600">{appointment.notes || appointment.symptoms || 'No notes provided'}</p>
+                              </div>
+                              <div>
+                                <h4 className="font-medium text-gray-900 mb-1">Appointment Type:</h4>
+                                <p className="text-gray-600 capitalize">{appointment.appointmentType || 'consultation'}</p>
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            {appointment.status === 'completed' && (
-                              <CheckCircle className="w-6 h-6 text-green-600" />
-                            )}
-                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                              appointment.status === 'completed'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              {appointment.status === 'completed' ? 'Completed' : 'Approved'}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-3">
-                          <div>
-                            <h4 className="font-medium text-gray-900 mb-1">Notes:</h4>
-                            <p className="text-gray-600">{appointment.notes || appointment.symptoms || 'No notes provided'}</p>
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-gray-900 mb-1">Appointment Type:</h4>
-                            <p className="text-gray-600 capitalize">{appointment.appointmentType || 'consultation'}</p>
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
 
-            {/* Patient Details & Prescription */}
+            {/* Quick Actions & Info */}
             <div className="space-y-6">
-              {selectedPatient ? (
-                <>
-                  {/* Patient Info */}
-                  <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Patient Details</h3>
-                    {(() => {
-                      const patient = approvedAppointments.find(a => a._id === selectedPatient);
-                      return patient ? (
-                        <div className="space-y-4">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-green-500 rounded-full flex items-center justify-center">
-                              <User className="w-6 h-6 text-white" />
-                            </div>
-                            <div>
-                              <h4 className="font-semibold text-gray-900">{patient.patientName}</h4>
-                              <p className="text-gray-500">{patient.patientEmail || 'Email not available'}</p>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <div>
-                              <span className="font-medium text-gray-900">Appointment Time:</span>
-                              <p className="text-gray-600">{patient.time}</p>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-900">Appointment Date:</span>
-                              <p className="text-gray-600">{new Date(patient.date).toLocaleDateString()}</p>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-900">Notes:</span>
-                              <p className="text-gray-600">{patient.notes || patient.symptoms || 'No notes provided'}</p>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-900">Appointment Type:</span>
-                              <p className="text-gray-600 capitalize">{patient.appointmentType || 'consultation'}</p>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-900">Status:</span>
-                              <p className="text-gray-600 capitalize">{patient.status}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ) : null;
-                    })()}
-                </div>
-
-                {/* Prescription */}
-                <div className="bg-white rounded-2xl shadow-lg p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Write Prescription</h3>
-                  <div className="space-y-4">
-                    <textarea
-                      value={prescriptions[selectedPatient] || ''}
-                      onChange={(e) => setPrescriptions({
-                        ...prescriptions,
-                        [selectedPatient]: e.target.value
-                      })}
-                      className="w-full p-4 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none resize-none"
-                      rows={6}
-                      placeholder="Enter prescription details...&#10;&#10;Example:&#10;1. Lisinopril 10mg - Once daily&#10;2. Metformin 500mg - Twice daily with meals&#10;3. Aspirin 81mg - Once daily"
-                    />
-                    <button
-                      onClick={() => handlePrescriptionSubmit(selectedPatient)}
-                      disabled={!prescriptions[selectedPatient]}
-                      className="w-full bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Save Prescription
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="bg-white rounded-2xl shadow-lg p-6">
-                <div className="text-center py-8">
-                  <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Select a Patient</h3>
-                  <p className="text-gray-500">Click on a patient appointment to view details and write prescriptions</p>
-                </div>
-              </div>
-            )}
 
             {/* Quick Stats */}
             <div className="bg-white rounded-2xl shadow-lg p-6">

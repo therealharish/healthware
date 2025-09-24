@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Pill, TestTube, User, Phone, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Calendar, Pill, TestTube, User, Phone, Clock, CheckCircle, XCircle, AlertCircle, FileText } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { appointmentApi } from '../utils/api';
+import { appointmentApi, prescriptionApi } from '../utils/api';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +20,9 @@ interface PatientDashboardProps {
 export default function PatientDashboard({ onNavigate }: PatientDashboardProps) {
   const { user } = useAuth();
   const [appointments, setAppointments] = useState<any[]>([]);
+  const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [prescriptionsLoading, setPrescriptionsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   // Dialog states
@@ -56,6 +58,28 @@ export default function PatientDashboard({ onNavigate }: PatientDashboardProps) 
     };
 
     fetchAppointments();
+  }, [user]);
+
+  // Fetch prescriptions
+  useEffect(() => {
+    const fetchPrescriptions = async () => {
+      if (!user) return;
+      
+      try {
+        setPrescriptionsLoading(true);
+        console.log('Fetching prescriptions for user:', user);
+        const response = await prescriptionApi.getMyPrescriptions();
+        console.log('Received prescriptions:', response);
+        setPrescriptions(response);
+      } catch (err) {
+        console.error('Error fetching prescriptions:', err);
+        // Don't show prescription errors as they're not critical
+      } finally {
+        setPrescriptionsLoading(false);
+      }
+    };
+
+    fetchPrescriptions();
   }, [user]);
 
   // Cancel appointment function
@@ -166,15 +190,14 @@ export default function PatientDashboard({ onNavigate }: PatientDashboardProps) 
     }
   });
 
-  const recentPrescriptions = [
-    {
-      id: 1,
-      doctor: 'Dr. Sarah Johnson',
-      date: 'Dec 10, 2024',
-      medicines: ['Lisinopril 10mg', 'Metformin 500mg'],
-      status: 'active'
-    }
-  ];
+  // Get recent prescriptions (last 3)
+  const recentPrescriptions = prescriptions.slice(0, 3).map(prescription => ({
+    id: prescription._id,
+    doctor: prescription.doctorEmail?.split('@')[0] || 'Unknown Doctor',
+    date: new Date(prescription.date || prescription.createdAt).toLocaleDateString(),
+    medicines: prescription.prescription ? [prescription.prescription.split('\n')[0]] : ['No details available'],
+    status: prescription.status || 'active'
+  }));
 
   const testResults = [
     {
@@ -471,32 +494,60 @@ export default function PatientDashboard({ onNavigate }: PatientDashboardProps) 
                   View All
                 </button>
               </div>
-              <div className="space-y-4">
-                {recentPrescriptions.map((prescription) => (
-                  <div key={prescription.id} className="p-4 bg-green-50 rounded-xl border border-green-200">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center space-x-2">
-                        <Pill className="w-5 h-5 text-green-600" />
-                        <span className="font-medium text-gray-900">Prescribed by {prescription.doctor}</span>
-                      </div>
-                      <span className="text-sm text-gray-500">{prescription.date}</span>
-                    </div>
-                    <div className="space-y-2">
-                      {prescription.medicines.map((medicine, index) => (
-                        <div key={index} className="flex items-center justify-between">
-                          <span className="text-gray-700">{medicine}</span>
-                          <button
-                            onClick={() => onNavigate('medicines')}
-                            className="text-blue-600 text-sm font-medium hover:text-blue-700"
-                          >
-                            Order
-                          </button>
+              
+              {prescriptionsLoading ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-3 text-gray-600">Loading prescriptions...</span>
+                </div>
+              ) : recentPrescriptions.length === 0 ? (
+                <div className="text-center py-8">
+                  <Pill className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No prescriptions yet</h3>
+                  <p className="text-gray-500 mb-4">Your prescriptions from doctors will appear here</p>
+                  <button
+                    onClick={() => onNavigate('book-appointment')}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700"
+                  >
+                    Book Appointment
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentPrescriptions.map((prescription) => (
+                    <div key={prescription.id} className="p-4 bg-green-50 rounded-xl border border-green-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          <Pill className="w-5 h-5 text-green-600" />
+                          <span className="font-medium text-gray-900">Prescribed by {prescription.doctor}</span>
                         </div>
-                      ))}
+                        <span className="text-sm text-gray-500">{prescription.date}</span>
+                      </div>
+                      <div className="space-y-2">
+                        {prescription.medicines.map((medicine, index) => (
+                          <div key={index} className="flex items-center justify-between">
+                            <span className="text-gray-700 truncate flex-1 mr-4">{medicine}</span>
+                            <button
+                              onClick={() => onNavigate('medicines')}
+                              className="text-blue-600 text-sm font-medium hover:text-blue-700 whitespace-nowrap"
+                            >
+                              Order
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-green-200">
+                        <button
+                          className="text-green-700 text-sm font-medium hover:text-green-800 flex items-center"
+                        >
+                          <FileText className="w-4 h-4 mr-1" />
+                          View Details
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

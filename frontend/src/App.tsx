@@ -7,9 +7,10 @@ import DoctorDashboard from './components/DoctorDashboard';
 import MedicineStore from './components/MedicineStore';
 import TestBooking from './components/TestBooking';
 import LoginPage from './components/LoginPage';
+import PrescriptionPortal from './components/PrescriptionPortal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-type Page = 'home' | 'book-appointment' | 'patient-dashboard' | 'doctor-dashboard' | 'medicines' | 'tests' | 'login';
+type Page = 'home' | 'book-appointment' | 'patient-dashboard' | 'doctor-dashboard' | 'medicines' | 'tests' | 'login' | 'prescription-portal';
 
 // Loading component
 const LoadingSpinner = () => (
@@ -23,6 +24,7 @@ function AppContent() {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
 
   // Initialize the page based on authentication status
   useEffect(() => {
@@ -48,7 +50,10 @@ function AppContent() {
     }
   }, [isAuthenticated, user, currentPage, hasInitialized]);
 
-  const handleNavigate = (page: string) => {
+  const handleNavigate = (page: string, appointment?: any) => {
+    if (page === 'prescription-portal' && appointment) {
+      setSelectedAppointment(appointment);
+    }
     setCurrentPage(page as Page);
   };
 
@@ -78,6 +83,12 @@ function AppContent() {
         return <PatientDashboard onNavigate={handleNavigate} />;
       case 'doctor-dashboard':
         return <DoctorDashboard onNavigate={handleNavigate} />;
+      case 'prescription-portal':
+        return selectedAppointment ? (
+          <PrescriptionPortal onNavigate={handleNavigate} appointment={selectedAppointment} />
+        ) : (
+          <DoctorDashboard onNavigate={handleNavigate} />
+        );
       case 'medicines':
         return <MedicineStore onNavigate={handleNavigate} />;
       case 'tests':
