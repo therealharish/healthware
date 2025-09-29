@@ -1,0 +1,15 @@
+{
+  "name": "healthware",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "start": "cd backend && npm start",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm start",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install"
+  },
+  "description": "Healthcare Management System",
+  "author": "Your Name",
+  "license": "MIT"
+}
