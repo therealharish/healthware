@@ -1,5 +1,4 @@
-import React from 'react';
-import { Calendar, Clock, Shield, Smartphone, Users, Zap, UserPlus, FileText, Activity, BarChart3 } from 'lucide-react';
+import { Calendar, Clock, Shield, Smartphone, Users, Zap, FileText, Activity, BarChart3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface HomePageProps {
@@ -113,19 +112,29 @@ export default function HomePage({ onNavigate, isLoggedIn = false }: HomePagePro
                   CareConnect streamlines your entire healthcare journey from booking to treatment.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                  <button
-                    onClick={() => onNavigate('book-appointment')}
-                    className="bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-blue-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
-                  >
-                    Book Your Appointment
-                  </button>
-                  {!isLoggedIn && (
+                  {user && (
                     <button
-                      onClick={() => onNavigate('login')}
-                      className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg border-2 border-blue-600 hover:bg-blue-50 transform hover:scale-105 transition-all duration-200"
+                      onClick={() => onNavigate('book-appointment')}
+                      className="bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-blue-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
                     >
-                      Sign In
+                      Book Your Appointment
                     </button>
+                  )}
+                  {!isLoggedIn && (
+                    <>
+                      <button
+                        onClick={() => onNavigate('login')}
+                        className="bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-blue-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
+                      >
+                        Sign In
+                      </button>
+                      <button
+                        onClick={() => onNavigate('about')}
+                        className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg border-2 border-blue-600 hover:bg-blue-50 transform hover:scale-105 transition-all duration-200"
+                      >
+                        Learn More
+                      </button>
+                    </>
                   )}
                 </div>
               </>
@@ -195,12 +204,21 @@ export default function HomePage({ onNavigate, isLoggedIn = false }: HomePagePro
               <p className="text-xl text-blue-100 mb-8">
                 Join thousands of patients who have already simplified their healthcare journey with CareConnect.
               </p>
-              <button
-                onClick={() => onNavigate('book-appointment')}
-                className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-lg"
-              >
-                Get Started Today
-              </button>
+              {user ? (
+                <button
+                  onClick={() => onNavigate('book-appointment')}
+                  className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-lg"
+                >
+                  Book Your Appointment
+                </button>
+              ) : (
+                <button
+                  onClick={() => onNavigate('login')}
+                  className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-lg"
+                >
+                  Get Started Today
+                </button>
+              )}
             </>
           )}
         </div>

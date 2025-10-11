@@ -55,5 +55,3 @@ router.get('/doctor-prescriptions', async (req, res) => {
 });
 
 module.exports = router;
-
-module.exports = router;

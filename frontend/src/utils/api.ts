@@ -64,10 +64,15 @@ export const authApi = {
     });
   },
   
-  register: (userType: 'patient' | 'doctor', firstName: string, lastName: string, gender: string, email: string, password: string) => {
+  register: (userType: 'patient' | 'doctor', firstName: string, lastName: string, gender: string, email: string, password: string, specialty?: string) => {
+    const payload: any = { userType, firstName, lastName, gender, email, password };
+    // Only add specialty if it's provided and not empty
+    if (specialty && specialty.trim()) {
+      payload.specialty = specialty.trim();
+    }
     return apiRequest('/register', {
       method: 'POST',
-      body: JSON.stringify({ userType, firstName, lastName, gender, email, password }),
+      body: JSON.stringify(payload),
     });
   },
 

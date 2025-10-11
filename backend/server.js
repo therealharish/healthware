@@ -475,7 +475,7 @@ app.put('/api/appointments/:id/complete', authenticateToken, async (req, res) =>
 
 // Register endpoint
 app.post('/api/register', async (req, res) => {
-  const { userType, firstName, lastName, gender, email, password } = req.body;
+  const { userType, firstName, lastName, gender, email, password, specialty } = req.body;
   
   // Validate required fields
   if (!userType || !firstName || !lastName || !gender || !email || !password) {
@@ -488,6 +488,11 @@ app.post('/api/register', async (req, res) => {
   // Validate userType
   if (!['patient', 'doctor'].includes(userType)) {
     return res.status(400).json({ message: 'Invalid userType. Must be either "patient" or "doctor"' });
+  }
+  
+  // Validate specialty for doctors
+  if (userType === 'doctor' && !specialty) {
+    return res.status(400).json({ message: 'Specialty is required for doctor registration' });
   }
   
   // Validate gender
@@ -508,55 +513,26 @@ app.post('/api/register', async (req, res) => {
     }
     
     // Create new user (password will be hashed by the pre-save middleware)
-    const user = new User({ 
+    const userData = { 
       userType, 
       firstName: firstName.trim(), 
       lastName: lastName.trim(),
       gender, 
       email: email.toLowerCase().trim(), 
       password 
-    });
+    };
+    
+    // Add specialty for doctors
+    if (userType === 'doctor') {
+      userData.specialty = specialty.trim();
+    }
+    
+    const user = new User(userData);
     await user.save();
 
-    // Create corresponding Patient or Doctor record
-    if (userType === 'patient') {
-      const patient = new Patient({
-        userId: user._id,
-        medicalHistory: {
-          allergies: [],
-          chronicConditions: [],
-          medications: [],
-          surgeries: []
-        },
-        appointments: [],
-        prescriptions: [],
-        testResults: []
-      });
-      await patient.save();
-    } else if (userType === 'doctor') {
-      const doctor = new Doctor({
-        userId: user._id,
-        specialty: user.specialty || 'General Medicine',
-        subSpecialties: [],
-        education: [],
-        experience: 0,
-        certifications: [],
-        workingHours: {
-          monday: { start: '9:00 AM', end: '5:00 PM', available: true },
-          tuesday: { start: '9:00 AM', end: '5:00 PM', available: true },
-          wednesday: { start: '9:00 AM', end: '5:00 PM', available: true },
-          thursday: { start: '9:00 AM', end: '5:00 PM', available: true },
-          friday: { start: '9:00 AM', end: '5:00 PM', available: true },
-          saturday: { start: '9:00 AM', end: '1:00 PM', available: true },
-          sunday: { start: '9:00 AM', end: '1:00 PM', available: false }
-        },
-        consultationFee: 100,
-        appointments: [],
-        prescriptions: [],
-        availability: []
-      });
-      await doctor.save();
-    }
+    // Note: We store all users (patients and doctors) in the Users collection
+    // The separate Patient and Doctor models are for extended data if needed in the future
+    // For now, the Users collection with userType field is sufficient
     
     // Generate JWT token
     const token = jwt.sign(

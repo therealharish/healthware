@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import HomePage from './components/HomePage';
+import AboutPage from './components/AboutPage';
 import BookAppointment from './components/BookAppointment';
 import PatientDashboard from './components/PatientDashboard';
 import DoctorDashboard from './components/DoctorDashboard';
@@ -10,7 +11,7 @@ import LoginPage from './components/LoginPage';
 import PrescriptionPortal from './components/PrescriptionPortal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-type Page = 'home' | 'book-appointment' | 'patient-dashboard' | 'doctor-dashboard' | 'medicines' | 'tests' | 'login' | 'prescription-portal';
+type Page = 'home' | 'about' | 'book-appointment' | 'patient-dashboard' | 'doctor-dashboard' | 'medicines' | 'tests' | 'login' | 'prescription-portal';
 
 // Loading component
 const LoadingSpinner = () => (
@@ -77,6 +78,8 @@ function AppContent() {
     switch (currentPage) {
       case 'home':
         return <HomePage onNavigate={handleNavigate} isLoggedIn={isAuthenticated} />;
+      case 'about':
+        return <AboutPage onNavigate={handleNavigate} />;
       case 'book-appointment':
         return <BookAppointment onNavigate={handleNavigate} />;
       case 'patient-dashboard':

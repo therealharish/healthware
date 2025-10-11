@@ -15,6 +15,7 @@ export default function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | 'other'>('male');
+  const [specialty, setSpecialty] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -26,6 +27,7 @@ export default function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
     setFirstName('');
     setLastName('');
     setGender('male');
+    setSpecialty('');
     setEmail('');
     setPassword('');
     setError(null);
@@ -34,10 +36,17 @@ export default function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    
+    // Validate specialty for doctors
+    if (isSignUp && userType === 'doctor' && !specialty) {
+      setError('Please select a specialty');
+      return;
+    }
+    
     setLoading(true);
     try {
       if (isSignUp) {
-        const response = await authApi.register(userType, firstName, lastName, gender, email, password);
+        const response = await authApi.register(userType, firstName, lastName, gender, email, password, specialty);
         // Use the AuthContext login function
         login(response.token, response.user);
       } else {
@@ -162,6 +171,34 @@ export default function LoginPage({ onNavigate, onLogin }: LoginPageProps) {
                     <option value="other">Other</option>
                   </select>
                 </div>
+
+                {userType === 'doctor' && (
+                  <div>
+                    <label htmlFor="specialty" className="block text-sm font-medium text-gray-700 mb-2">
+                      Specialty
+                    </label>
+                    <select
+                      id="specialty"
+                      name="specialty"
+                      required
+                      value={specialty}
+                      onChange={(e) => setSpecialty(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
+                    >
+                      <option value="">Select a specialty</option>
+                      <option value="Cardiology">Cardiology</option>
+                      <option value="Dermatology">Dermatology</option>
+                      <option value="Pediatrics">Pediatrics</option>
+                      <option value="Orthopedics">Orthopedics</option>
+                      <option value="Neurology">Neurology</option>
+                      <option value="General Medicine">General Medicine</option>
+                      <option value="Psychiatry">Psychiatry</option>
+                      <option value="Ophthalmology">Ophthalmology</option>
+                      <option value="ENT">ENT</option>
+                      <option value="Gynecology">Gynecology</option>
+                    </select>
+                  </div>
+                )}
               </>
             )}
             

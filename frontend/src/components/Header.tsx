@@ -53,8 +53,20 @@ export default function Header({ currentPage, onNavigate, isLoggedIn, userType, 
             >
               Home
             </button>
-            {/* Only show Book Appointment for patients or non-logged in users */}
-            {(!isLoggedIn || userType === 'patient') && (
+            {!isLoggedIn && (
+              <button
+                onClick={() => onNavigate('about')}
+                className={`px-3 py-2 text-sm font-medium transition-colors ${
+                  currentPage === 'about'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-600 hover:text-blue-600'
+                }`}
+              >
+                About
+              </button>
+            )}
+            {/* Only show Book Appointment for logged-in patients */}
+            {isLoggedIn && userType === 'patient' && (
               <button
                 onClick={() => onNavigate('book-appointment')}
                 className={`px-3 py-2 text-sm font-medium transition-colors ${
